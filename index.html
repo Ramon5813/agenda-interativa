@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agenda Interativa</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      text-align: center;
+    }
+    .dia {
+      margin-bottom: 20px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    .realizada {
+      text-decoration: line-through;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+  <h1>📅 Agenda da Semana</h1>
+
+  <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 20px;">
+    <button id="btn-anterior">⬅ Semana Anterior</button>
+    <div id="semana-info" style="font-weight: bold;"></div>
+    <button id="btn-proximo">Semana Seguinte ➡</button>
+  </div>
+
+  <div id="agenda"></div>
+
+  <!-- Botão flutuante -->
+  <button id="btn-tarefas-fixas" style="
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    z-index: 999;
+  ">📌</button>
+
+  <!-- Modal de tarefas fixas -->
+  <div id="modal-tarefas" style="
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 998;
+  ">
+    <div style="
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+    ">
+      <button id="fechar-modal" style="
+        position: absolute;
+        top: 10px; right: 10px;
+        background: red;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px; height: 30px;
+        font-size: 16px;
+        cursor: pointer;
+      ">✕</button>
+      <h2>Tarefas Fixas do Mês</h2>
+      <ul id="lista-fixas" style="list-style: none; padding: 0;"></ul>
+      <button id="adicionar-tarefa-fixa" style="
+        margin-top: 10px;
+        background-color: #28a745;
+        color: white;
+        padding: 8px 12px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      ">➕ Adicionar Tarefa</button>
+    </div>
+  </div>
+
+  <script>
+    const dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+    let semanaOffset = 0;
+
+    const agendaDiv = document.getElementById('agenda');
+    const semanaInfo = document.getElementById('semana-info');
+
+    function formatarData(data) {
+      return data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function calcularInicioSemana(offset) {
+      const hoje = new Date();
+      const diaSemana = hoje.getDay() || 7;
+      const segunda = new Date(hoje);
+      segunda.setDate(hoje.getDate() - diaSemana + 1 + offset * 7);
+      segunda.setHours(0,0,0,0);
+      return segunda;
+    }
+
+    function gerarAgenda() {
+      agendaDiv.innerHTML = '';
+
+      const inicioSemana = calcularInicioSemana(semanaOffset);
+      const dataInicioFormatada = formatarData(inicioSemana);
+
+      const fimSemana = new Date(inicioSemana);
+      fimSemana.setDate(inicioSemana.getDate() + 6);
+      const dataFimFormatada = formatarData(fimSemana);
+
+      semanaInfo.textContent = `Semana de ${dataInicioFormatada} até ${dataFimFormatada}`;
+
+      for (let i = 0; i < 7; i++) {
+        const data = new Date(inicioSemana);
+        data.setDate(inicioSemana.getDate() + i);
+
+        const bloco = document.createElement('div');
+        bloco.className = 'dia';
+
+        const titulo = document.createElement('h2');
+        titulo.textContent = `${dias[i]} – ${formatarData(data)}`;
+        bloco.appendChild(titulo);
+
+        let tarefaIndex = 1;
+        while (true) {
+          const keyCheckbox = `semanaOffset-${semanaOffset}-dia-${i}-tarefa-${tarefaIndex}-checkbox`;
+          const keyInput = `semanaOffset-${semanaOffset}-dia-${i}-tarefa-${tarefaIndex}-nome`;
+
+          const salvoCheckbox = localStorage.getItem(keyCheckbox);
+          const salvoInput = localStorage.getItem(keyInput);
+
+          if (salvoCheckbox === null && salvoInput === null && tarefaIndex > 3) break;
+
+          criarTarefa(bloco, semanaOffset, i, tarefaIndex, salvoInput || '', salvoCheckbox === 'true');
+          tarefaIndex++;
+        }
+
+        const botaoAdd = document.createElement('button');
+        botaoAdd.textContent = '➕ Adicionar tarefa';
+        botaoAdd.style.marginTop = '10px';
+
+        botaoAdd.addEventListener('click', () => {
+          criarTarefa(bloco, semanaOffset, i, tarefaIndex);
+          tarefaIndex++;
+        });
+
+        bloco.appendChild(botaoAdd);
+        agendaDiv.appendChild(bloco);
+      }
+    }
+
+    function criarTarefa(BlocoDia, semana, dia, tarefaIndex, valorNome = '', marcada = false) {
+      const label = document.createElement('label');
+      label.style.display = 'flex';
+      label.style.alignItems = 'center';
+      label.style.gap = '10px';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Nome da tarefa';
+      input.style.flex = '1';
+      input.value = valorNome;
+
+      const keyCheckbox = `semanaOffset-${semana}-dia-${dia}-tarefa-${tarefaIndex}-checkbox`;
+      const keyInput = `semanaOffset-${semana}-dia-${dia}-tarefa-${tarefaIndex}-nome`;
+
+      if (marcada) {
+        checkbox.checked = true;
+        label.classList.add('realizada');
+      }
+
+      checkbox.addEventListener('change', () => {
+        localStorage.setItem(keyCheckbox, checkbox.checked);
+        label.classList.toggle('realizada', checkbox.checked);
+      });
+
+      input.addEventListener('input', () => {
+        localStorage.setItem(keyInput, input.value);
+      });
+
+      label.appendChild(checkbox);
+      label.appendChild(input);
+      BlocoDia.appendChild(label);
+    }
+
+    document.getElementById('btn-anterior').addEventListener('click', () => {
+      semanaOffset--;
+      gerarAgenda();
+    });
+
+    document.getElementById('btn-proximo').addEventListener('click', () => {
+      semanaOffset++;
+      gerarAgenda();
+    });
+
+    gerarAgenda();
+
+    // ===== TAREFAS FIXAS (Modal) =====
+    const btnTarefas = document.getElementById('btn-tarefas-fixas');
+    const modal = document.getElementById('modal-tarefas');
+    const fecharModal = document.getElementById('fechar-modal');
+    const listaFixas = document.getElementById('lista-fixas');
+    const botaoAddFixa = document.getElementById('adicionar-tarefa-fixa');
+
+    function carregarTarefasFixas() {
+      listaFixas.innerHTML = '';
+      const tarefas = JSON.parse(localStorage.getItem('tarefasFixasMes')) || [];
+
+      tarefas.forEach((tarefa, index) => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.alignItems = 'center';
+        li.style.gap = '10px';
+        li.style.marginBottom = '8px';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = tarefa.feita;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = tarefa.texto;
+        input.style.flex = '1';
+
+        const btnExcluir = document.createElement('button');
+        btnExcluir.textContent = '🗑';
+        btnExcluir.style.background = 'transparent';
+        btnExcluir.style.border = 'none';
+        btnExcluir.style.cursor = 'pointer';
+        btnExcluir.style.fontSize = '16px';
+
+        if (tarefa.feita) {
+          input.style.textDecoration = 'line-through';
+          input.style.color = 'gray';
+        }
+
+        checkbox.addEventListener('change', () => {
+          tarefas[index].feita = checkbox.checked;
+          salvarTarefasFixas(tarefas);
+          carregarTarefasFixas();
+        });
+
+        input.addEventListener('input', () => {
+          tarefas[index].texto = input.value;
+          salvarTarefasFixas(tarefas);
+        });
+
+        btnExcluir.addEventListener('click', () => {
+          tarefas.splice(index, 1);
+          salvarTarefasFixas(tarefas);
+          carregarTarefasFixas();
+        });
+
+        li.appendChild(checkbox);
+        li.appendChild(input);
+        li.appendChild(btnExcluir);
+        listaFixas.appendChild(li);
+      });
+    }
+
+    function salvarTarefasFixas(tarefas) {
+      localStorage.setItem('tarefasFixasMes', JSON.stringify(tarefas));
+    }
+
+    botaoAddFixa.addEventListener('click', () => {
+      const tarefas = JSON.parse(localStorage.getItem('tarefasFixasMes')) || [];
+      tarefas.push({ texto: '', feita: false });
+      salvarTarefasFixas(tarefas);
+      carregarTarefasFixas();
+    });
+
+    btnTarefas.addEventListener('click', () => {
+      modal.style.display = 'flex';
+      carregarTarefasFixas();
+    });
+
+    fecharModal.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+  </script>
+</body>
+</html>
